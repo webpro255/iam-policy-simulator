@@ -1,3 +1,11 @@
+![Build Status](https://github.com/webpro255/iam-policy-simulator/actions/workflows/deploy.yml/badge.svg)
+![Node](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)
+![License](https://img.shields.io/github/license/webpro255/iam-policy-simulator)
+![Last Commit](https://img.shields.io/github/last-commit/webpro255/iam-policy-simulator)
+![Issues](https://img.shields.io/github/issues/webpro255/iam-policy-simulator)
+![Watchers](https://img.shields.io/github/watchers/webpro255/iam-policy-simulator)
+
+
 # IAM Policy Simulator
 
 A web application to visualize AWS IAM policies as graphs.
