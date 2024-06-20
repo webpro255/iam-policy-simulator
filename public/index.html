@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IAM Policy Simulator</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        #graph svg {
+            border: 1px solid black;
+        }
+        .node circle {
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+        .node text {
+            font: 12px sans-serif;
+            pointer-events: none;
+        }
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        .action { fill: #1f77b4; }
+        .resource { fill: #ff7f0e; }
+        .effect { fill: #2ca02c; }
+        .condition { fill: #d62728; }
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            width: auto;
+            padding: 8px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 1px solid #fff;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        .legend {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+        .legend rect {
+            stroke-width: 2;
+            stroke: black;
+        }
+    </style>
+</head>
+<body>
+    <textarea id="policy-input" rows="10" cols="50" placeholder="Paste your IAM policy here..."></textarea>
+    <button onclick="submitPolicy()">Submit</button>
+    <button onclick="exportGraph()">Export Graph</button>
+    <input type="text" id="search" placeholder="Search..." oninput="searchNode()">
+    <div id="graph"></div>
+    <script>
+        function submitPolicy() {
+            const policy = document.getElementById('policy-input').value;
+            fetch('/parse-policy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ policy }),
+            })
+            .then(response => response.json())
+            .then(data => renderGraph(data))
+            .catch(error => console.error('Error:', error));
+        }
+
+        function renderGraph(data) {
+            document.getElementById('graph').innerHTML = ''; // Clear previous graph
+            const svg = d3.select("#graph").append("svg")
+                .attr("width", 800)
+                .attr("height", 600)
+                .call(d3.zoom().on("zoom", function (event) {
+                    g.attr("transform", event.transform)
+                }));
+
+            const g = svg.append("g");
+
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            const simulation = d3.forceSimulation(data.nodes)
+                .force("link", d3.forceLink(data.links).id(d => d.id).distance(200))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(400, 300));
+
+            const link = g.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(data.links)
+                .enter().append("line")
+                .attr("class", "link");
+
+            const node = g.append("g")
+                .attr("class", "nodes")
+                .selectAll("g")
+                .data(data.nodes)
+                .enter().append("g")
+                .attr("class", "node");
+
+            node.append("circle")
+                .attr("r", 10)
+                .attr("class", d => d.group)
+                .attr("fill", d => color(d.group))
+                .on("mouseover", function(event, d) {
+                    d3.select(this).transition()
+                        .duration(750)
+                        .attr("r", 16);
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    tooltip.html(`Type: ${d.label}<br>Value: ${d.value}`)
+                        .style("left", (event.pageX + 5) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function(event, d) {
+                    d3.select(this).transition()
+                        .duration(750)
+                        .attr("r", 10);
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                });
+
+            node.append("text")
+                .attr("x", 12)
+                .attr("dy", ".35em")
+                .text(d => d.label);
+
+            simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                node
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+            node.call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+            // Add legend
+            const legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("x", 20)
+                .attr("y", 20)
+                .attr("height", 100)
+                .attr("width", 100);
+
+            legend.selectAll('g').data(["action", "resource", "effect", "condition"])
+                .enter()
+                .append('g')
+                .each(function(d, i) {
+                    const g = d3.select(this);
+                    g.append("rect")
+                        .attr("x", 20)
+                        .attr("y", i * 25 + 10)
+                        .attr("width", 18)
+                        .attr("height", 18)
+                        .attr("class", d);
+
+                    g.append("text")
+                        .attr("x", 50)
+                        .attr("y", i * 25 + 22)
+                        .attr("height", 30)
+                        .attr("width", 100)
+                        .text(d.charAt(0).toUpperCase() + d.slice(1));
+                });
+        }
+
+        function exportGraph() {
+            const svg = document.querySelector("svg");
+            const serializer = new XMLSerializer();
+            const source = serializer.serializeToString(svg);
+            const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "graph.svg";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function searchNode() {
+            const term = document.getElementById('search').value.toLowerCase();
+            d3.selectAll('.node')
+                .style('opacity', d => d.label.toLowerCase().includes(term) ? 1 : 0.1);
+        }
+    </script>
+</body>
+</html>
