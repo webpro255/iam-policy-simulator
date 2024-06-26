@@ -38,7 +38,7 @@ node app.js
 ### Example IAM Policy
 ```bash
 {
-    "Version": "2012-10-17",
+    "Version": "2024-06-17",
     "Statement": [
         {
             "Effect": "Allow",
